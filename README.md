@@ -82,3 +82,9 @@ Candidates are required to submit the following:
          - **Most importantly**, walk us through your process for ensuring the quality, correctness, and security of AI-assisted output. How did you test and verify? (This part is critical!)
       - **Demo**: Show your code/tests in action.
       - **Conclusion**: Learnings, challenges, future ideas.
+
+## Project documentation
+
+- **[docs/README.md](docs/README.md)**: how to run the project (local and Docker), folder structure, components used, observability, token-efficient AI development (the graphify knowledge graph, about 9× fewer tokens per codebase question, plus the caveman and ponytail agent skills), and what is not yet implemented.
+- **[docs/data-flow.md](docs/data-flow.md)**: how data flows from a player joining a quiz to the leaderboard updating.
+- **[docs/api.md](docs/api.md)**: REST endpoints and Socket.IO events, with request/response examples and error codes.

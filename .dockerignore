@@ -1,0 +1,16 @@
+# Host dependencies and build output must not overwrite the container's (native binaries differ).
+node_modules
+dist
+
+# Secrets and local files
+.env
+.env.*
+!.env.example
+*.pem
+
+.git
+.DS_Store
+*.log
+docs
+tests
+graphify-out

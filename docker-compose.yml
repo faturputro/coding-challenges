@@ -1,0 +1,146 @@
+# Runs the full stack: PostgreSQL, Redis, migrations, API (+ Socket.IO + built Vue app) and the worker.
+#
+#   docker compose up --build          # app on http://localhost:9000
+#   docker compose run --rm migrate npx sequelize-cli db:seed --seed 20261001000000-quiz-questions.js
+#   docker compose run --rm migrate npx sequelize-cli db:seed --seed 20261001182212-create_admin_account.js
+#   docker compose --profile observability up --build   # also runs OpenObserve on :5080
+#
+# Values come from `.env` (Compose reads it for ${...} substitution). Only APP_PKCS8_KEY is required.
+
+x-app-env: &app-env
+  NODE_ENV: production
+  PORT: 9000
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_NAME: ${DB_NAME:-quiz}
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_DB: 0
+  APP_PKCS8_KEY: ${APP_PKCS8_KEY:?Set APP_PKCS8_KEY in .env (see docs/README.md)}
+  # The browser opens the app on the published port, so that is the allowed socket origin.
+  SOCKET_ALLOWED_ORIGINS: ${SOCKET_ALLOWED_ORIGINS:-http://localhost:${API_PORT:-9000}}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SUBMISSION_WORKER_CONCURRENCY: ${SUBMISSION_WORKER_CONCURRENCY:-5}
+  # Telemetry stays off unless these are set (e.g. OPENOBSERVE_URL=http://openobserve:5080).
+  OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
+  OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-default}
+  OPENOBSERVE_EMAIL: ${OPENOBSERVE_EMAIL:-}
+  OPENOBSERVE_PASSWORD: ${OPENOBSERVE_PASSWORD:-}
+
+x-app: &app
+  build:
+    context: .
+    args:
+      # Browser RUM settings are inlined into the client bundle at build time.
+      VITE_OPENOBSERVE_CLIENT_TOKEN: ${VITE_OPENOBSERVE_CLIENT_TOKEN:-}
+      VITE_OPENOBSERVE_SITE: ${VITE_OPENOBSERVE_SITE:-}
+      VITE_OPENOBSERVE_ORG: ${VITE_OPENOBSERVE_ORG:-default}
+      VITE_OPENOBSERVE_APP_ID: ${VITE_OPENOBSERVE_APP_ID:-quiz-web}
+  image: elsa-quiz:local
+  restart: unless-stopped
+  # Lets in-flight requests and jobs finish and telemetry flush on `docker compose down`.
+  stop_grace_period: 15s
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-quiz}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published, to avoid clashing with a local PostgreSQL on 5432.
+    # Uncomment to inspect it from the host:
+    # ports: ["5433:5432"]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF keeps queued jobs across restarts. BullMQ requires `noeviction`:
+    # evicting its keys would silently drop jobs.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # ports: ["6380:6379"]
+
+  # One-off: applies migrations, then exits. The API and worker wait for it to succeed.
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["npx", "sequelize-cli", "db:migrate"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["node", "-r", "./dist/server/instrumentation.js", "dist/server/index.js"]
+    environment:
+      <<: *app-env
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-elsa}
+    ports:
+      - "${API_PORT:-9000}:9000"
+    healthcheck:
+      # The slim image has no curl/wget; Node's fetch is enough.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9000/healthcheck').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["node", "-r", "./dist/server/instrumentation.js", "dist/server/worker.js"]
+    environment:
+      <<: *app-env
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-elsa}-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Optional local OpenObserve: `docker compose --profile observability up`.
+  # Then set OPENOBSERVE_URL=http://openobserve:5080 plus OPENOBSERVE_EMAIL/PASSWORD in .env.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      ZO_DATA_DIR: /data
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_EMAIL:-root@example.com}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:-Complexpass#123}
+    volumes:
+      - o2data:/data
+    ports:
+      - "5080:5080"
+
+volumes:
+  pgdata:
+  redisdata:
+  o2data:

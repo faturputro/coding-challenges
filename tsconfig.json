@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "es2020",
+    "allowJs": false,
+    "removeComments": true,
+    "resolveJsonModule": true,
+    "typeRoots": [
+      "./node_modules/@types",
+    ],
+    "sourceMap": true,
+    "strict": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "baseUrl": ".",
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true,
+    "useUnknownInCatchVariables": false,
+    "skipLibCheck": true,
+    "useDefineForClassFields": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["./src/client/*"],
+      "@server/*": ["./src/server/*"],
+      "@client/*": ["./src/client/*"]
+    },
+    "isolatedModules": true
+  },
+  "include": ["src/server/**/*", "config/vite.config.ts", "src/client/**/*"],
+  "exclude": ["node_modules", "dist", "seeders", "migrations", "config"]
+}

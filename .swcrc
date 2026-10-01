@@ -1,0 +1,26 @@
+{
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "tsx": false,
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "target": "es5",
+    "loose": false,
+    "minify": {
+      "compress": false,
+      "mangle": false
+    },
+    "paths": {
+      "@server/*": ["./src/server/*"],
+      "@client/*": ["./src/client/*"]
+    },
+    "baseUrl": "."
+  },
+  "module": {
+    "type": "commonjs"
+  },
+  "minify": false,
+  "isModule": true
+}
