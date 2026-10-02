@@ -187,7 +187,7 @@ QUIZ_TEST_REDIS_URL=redis://127.0.0.1:16399 node --test tests/*.cjs
 
 ![AWS deployment architecture](./images/aws-architecture.png)
 
-The target deployment on AWS runs the API as containers on ECS Fargate behind a load balancer, with ElastiCache (Redis) and Aurora (PostgreSQL). Amazon SQS would replace BullMQ as the message queue. See [data-flow.md](./data-flow.md) for how requests and messages move between these components.
+The target deployment on AWS: traffic passes through **Cloudflare** (DNS, DDoS protection) to an **Elastic Load Balancer**, which spreads it across the API containers on **ECS Fargate** (images from ECR). The containers use **Aurora** (PostgreSQL), **ElastiCache** (Redis) and **SQS**, which would replace BullMQ as the message queue. Their environment variables and secrets come from **AWS SSM Parameter Store**. See [data-flow.md](./data-flow.md) for how requests and messages move between these components.
 
 ---
 
